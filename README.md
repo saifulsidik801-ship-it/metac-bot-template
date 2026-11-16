@@ -239,3 +239,19 @@ See the [integrations README](integrations/README.md) for available integrations
 
 ## Ideas for bot improvements
 You can find some ideas of what you can do to improve this template by taking a look at what other bots have done [here](https://www.metaculus.com/notebooks/43497/what-are-other-bots-doing/). You can also look at research done by Metaculus and the field in the [research section](https://www.metaculus.com/notebooks/38928/ai-benchmark-resources/#research-reports-and-overview-of-the-field) of the bot resources page. Asking an LLM to read through everything and give ideas may be a decent place to start. Please try to do something new, or something that is a spinoff (or better implementation) of what others have done. We don't want to test the same idea multiple times.
+
+## Winner-pattern upgrades (2026-11-16)
+
+This fork applies the patterns of two open-source winners — Panshul42 (1st, Q2 2025) and nostreambot (15th, Summer 2026) — to the template. Deliberately NOT copied: Panshul42's cross-wired forecaster contexts (each forecaster here sees only its own stage-1 output), its dead proxy code, nostreambot's stacker (no better than median on 88 questions), and the deprecated community benchmark.
+
+1. **Two-stage outside→inside prompts** (binary, multiple choice, numeric): stage 1 builds the outside view — reference class + base rate from historical evidence; stage 2 adjusts it with current evidence, with an evidence-weighting system and a forecasting checklist.
+2. **Diversified ensemble**: 3 forecasters, one per vendor via OpenRouter (`openrouter/openai/gpt-6.1-sol`, `openrouter/anthropic/claude-opus-5.5`, `openrouter/google/gemini-4-argon` — slugs verified against the live OpenRouter model list 2026-11-16), round-robin, 3 predictions per question. Aggregation is the median (binary/MC) / pointwise CDF median (numeric); the framework already medians binary and numeric, the MC override to median is in `main.py`.
+3. **Multi-source research**: AskNews stays primary (free for registered bot makers); a SmartSearcher web pass runs in parallel, plus a prediction-market snapshot from the public no-key Polymarket Gamma and Kalshi APIs. Any dead source is skipped, never fatal.
+4. **Gap-fill pass**: one cheap LLM call lists up to 4 missing decision-relevant facts; one search per gap, appended as a second-pass section.
+5. **Measured-failure prompt rules**: source-tier tags, provenance ladder, null-result reading, soft-clock rule, history-discharged rule, remaining-exposure sentence, market reading rules, and the Metaculus spot-peer scoring sentence.
+6. **Richer numeric elicitation**: 13 percentiles instead of 6, with CDF legality enforced on parse (open tails 0.001/0.999, max step 0.59, strictly increasing).
+7. **Backtest vs resolutions**: `backtest.py` scores saved forecasts against actual resolutions (Brier / approx log score) and screens the saved research for post-close dates (leakage). Run: `METACULUS_TOKEN=... python backtest.py --reports-dir ./reports`. Set `folder_to_save_reports_to` in `main.py` first so reports are saved.
+8. **Reliability**: questions closing within 15 minutes are skipped before any spend; the close time is re-checked right before forecasting and aggregation (publish gate); every research provider is failure-isolated.
+9. **Cost routing**: bill the Metaculus-donated OpenRouter key first (apply via the participation form), personal key as fallback. No Perplexity/Serper keys are needed for items 1–8. Per-question cost is ~6 forecaster calls (3× two-stage) + 1 gap-fill analyzer call + up to 4 gap searches, vs 5 one-shot calls before.
+
+Skipped: an external dispatcher (cron-job.org) triggering `workflow_dispatch` twice an hour — GitHub cron alone under-delivers (~22% in nostreambot's logs) — because it needs an external account; add it if you have one.
